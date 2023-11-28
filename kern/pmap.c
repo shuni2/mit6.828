@@ -127,14 +127,14 @@ mem_init(void)
 	size_t n;
 
 	// Find out how much memory the machine has (npages & npages_basemem).
-	i386_detect_memory();
+	i386_detect_memory();//cpu判断内存有多大，够存多少个内存页(npages)
 
 	// Remove this line when you're ready to test this function.
 	// panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
-	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
+	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);//给页目录申请内存
 	memset(kern_pgdir, 0, PGSIZE);
 
 	//////////////////////////////////////////////////////////////////////
@@ -263,7 +263,14 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	for(int i = 0; i<NCPU;++i){
+		boot_map_region(kern_pgdir, 
+			KSTACKTOP-(KSTKSIZE+KSTKGAP)*i - KSTKSIZE, 
+			KSTKSIZE, 
+			PADDR(percpu_kstacks[i]), 
+			PTE_W);
+	}
+	
 }
 
 // --------------------------------------------------------------
