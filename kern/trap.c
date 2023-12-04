@@ -218,6 +218,12 @@ trap_dispatch(struct Trapframe *tf)
 		monitor(tf);
 		return;
 	}
+	if(tf->tf_trapno == T_SYSCALL){
+		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx,tf->tf_regs.reg_ecx,
+		tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+		return ;
+		
+	}
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the

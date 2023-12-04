@@ -29,7 +29,26 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
+	int begin = 0;
+	if(curenv)//从当前的env的下一个env开始尝试
+	{
+		begin = ENVX(curenv->env_id) + 1;
+	}
 
+	for(int i = 0 ; i < NENV; ++i)//遍历整个 envs 数组寻找 ENV_RUNNABLE 的环境
+	{
+		int index = (begin + i) % NENV;
+		if(envs[index].env_status == ENV_RUNNABLE)
+		{
+			env_run(&envs[index]);
+		}
+	}
+
+	if(curenv && curenv->env_status == ENV_RUNNING)//如果之前的环境还没运行结束，即ENV_RUNNING，则继续执行之前的env
+	{
+		env_run(curenv);
+	}
+	//实在不行就 drop through to the halt
 	// sched_halt never returns
 	sched_halt();
 }
