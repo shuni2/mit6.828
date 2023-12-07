@@ -35,7 +35,7 @@ _pgfault_upcall:
 	// Call the C page fault handler.
 	pushl %esp			// function argument: pointer to UTF
 	movl _pgfault_handler, %eax
-	call *%eax
+	call *%eax				//调用页错误处理函数
 	addl $4, %esp			// pop function argument
 	
 	// Now the C page fault handler has returned and you must return
@@ -65,18 +65,28 @@ _pgfault_upcall:
 	// ways as registers become unavailable as scratch space.
 	//
 	// LAB 4: Your code here.
-
+	movl 0x28(%esp), %eax				//取第11个参数，eip
+	movl 0x30(%esp), %edx				//去第13个参数，esp
+	subl $4, %edx					//在返回函数的栈帧中开辟1个word大小的空间
+	movl %edx, 0x30(%esp)			//将esp保存回去
+	movl %eax, (%edx)				//将trap-time eip push到trap-time stack中
+									//如果这是递归错误，那么eip就会存在32位空白中
+							
 	// Restore the trap-time registers.  After you do this, you
 	// can no longer modify any general-purpose registers.
 	// LAB 4: Your code here.
+	addl $8, %esp
+	popal
 
 	// Restore eflags from the stack.  After you do this, you can
 	// no longer use arithmetic operations or anything else that
 	// modifies eflags.
 	// LAB 4: Your code here.
-
+	addl $4, %esp
+	popfl
 	// Switch back to the adjusted trap-time stack.
 	// LAB 4: Your code here.
-
+	popl %esp
 	// Return to re-execute the instruction that faulted.
 	// LAB 4: Your code here.
+	ret

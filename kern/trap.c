@@ -314,7 +314,7 @@ page_fault_handler(struct Trapframe *tf)
 	uint32_t fault_va;
 
 	// Read processor's CR2 register to find the faulting address
-	fault_va = rcr2();
+	fault_va = rcr2();	//获取发生页错误的地址
 
 	// Handle kernel-mode page faults.
 
@@ -354,7 +354,31 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
-
+	//检查是否有处理页错误的 upcall
+	if(curenv->env_pgfault_upcall)
+	{
+		uintptr_t stacktop = UXSTACKTOP;
+		//检查是否在递归调用 handler
+		if(tf->tf_esp > UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP)
+			stacktop = tf->tf_esp;
+		
+		//预留32位字的 scratch space
+		uint32_t size = sizeof(struct UTrapframe) + sizeof(uint32_t);
+		//检查是否有权限读写exception stack
+		user_mem_assert(curenv, (void *)(stacktop-size), size, PTE_U|PTE_W);
+		//填充UTrapframe
+		struct UTrapframe *utf = (struct UTrapframe *)(stacktop-size);
+		utf->utf_fault_va = fault_va;
+		utf->utf_err = tf->tf_err;
+		utf->utf_regs = tf->tf_regs;
+		utf->utf_eip = tf->tf_eip;
+		utf->utf_eflags = tf->tf_eflags;
+		utf->utf_esp = tf->tf_esp;
+		//设置eip和esp，运行 upcall
+		curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+		curenv->env_tf.tf_esp = (uintptr_t)utf;
+		env_run(curenv);
+	}
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);
