@@ -105,6 +105,22 @@ trap_init(void)
 	SETGATE(idt[16], 0, GD_KT, th16, 0);
 
 	SETGATE(idt[T_SYSCALL], 0, GD_KT, th_syscall, 3);
+
+	//初始化外部中断的中断向量
+	void irq_error_handler();
+	void irq_kbd_handler();
+	void irq_ide_handler();
+	void irq_timer_handler();
+	void irq_spurious_handler();
+	void irq_serial_handler();
+
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, irq_error_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, irq_ide_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, irq_kbd_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, irq_serial_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, irq_spurious_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, irq_timer_handler, 3);
+
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -222,7 +238,6 @@ trap_dispatch(struct Trapframe *tf)
 		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx,tf->tf_regs.reg_ecx,
 		tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
 		return ;
-		
 	}
 
 	// Handle spurious interrupts
@@ -237,6 +252,12 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
+	if(tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER)
+	{
+		cprintf("Timer interrupt on irq 0\n");
+		lapic_eoi();
+		sched_yield();
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);

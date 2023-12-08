@@ -332,7 +332,75 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	// panic("sys_ipc_try_send not implemented");
+	int r;
+	struct Env * env;
+
+	// 检查 envid 是否合规
+	if((r=envid2env(envid, &env ,0)) < 0) 
+	{
+		return -E_BAD_ENV ;
+	}
+
+	// 检查目标env是否准备接受
+	if(env->env_ipc_recving == 0)
+	{
+		return -E_IPC_NOT_RECV;
+	}
+
+	if (srcva < (void*)UTOP) {
+		pte_t *pte;
+		struct PageInfo *pg = page_lookup(curenv->env_pgdir, srcva, &pte);
+
+		cprintf("sys_ipc_try_send():srcva=%08x\n", (uintptr_t)srcva);
+		
+		// 检查 srcva 是否 page-aligned.
+		if(srcva != ROUNDDOWN(srcva, PGSIZE))
+		{
+			cprintf("sys_ipc_try_send():srcva is not page-alligned\n");
+			return -E_INVAL;
+		}
+		// 检查权限
+		if((*pte & perm & (PTE_W|PTE_P|PTE_U))!=(perm & (PTE_W|PTE_P|PTE_U)))
+		{
+			cprintf("sys_ipc_try_send():perm is wrong\n");
+			return -E_INVAL;
+		}
+		// 如果来源环境没有映射pg页
+		if(!pg)
+		{
+			cprintf("sys_ipc_try_send():srcva is not maped\n");
+			return -E_INVAL;
+		}
+		// 如果perm要求写权限，但是srcva没有写权限
+		if ((perm & PTE_W) && !(*pte & PTE_W))
+		{
+			cprintf("sys_ipc_try_send():*pte do not have PTE_W, but perm have\n");
+			return -E_INVAL;
+		}
+		// 如果目标环境以有效dstva参数调用 sys_ipc_recv，说明目标环境愿意接受页面映射
+		if (env->env_ipc_dstva < (void*)UTOP) {
+			// 将当前环境的 pg 页 映射到目标环境的dstva上
+			if((r = page_insert(env->env_pgdir, pg, env->env_ipc_dstva, perm))<0)
+			{
+				return -E_NO_MEM;
+			}
+			env->env_ipc_perm = perm;
+		}
+
+	}
+
+	// 标记目标环境为 未准备接收
+	env->env_ipc_recving = 0;
+	// 将目标环境的 IPC发送方 设置为当前环境
+	env->env_ipc_from = curenv->env_id;
+	// 发送 message 的 value
+	env->env_ipc_value = value; 
+	// 设置目标环境为可运行
+	env->env_status = ENV_RUNNABLE;
+	// 设置目标环境的eax
+	env->env_tf.tf_regs.reg_eax = 0;
+	return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -350,7 +418,27 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+	// panic("sys_ipc_recv not implemented");
+	// 检查 dstva 的合规性
+	if ((uintptr_t)dstva < UTOP && PGOFF(dstva) != 0) 
+	{
+		return -E_INVAL;
+	}
+	// 设置 IPC 的初始值
+	// 标识正在等待接收消息
+	curenv->env_ipc_recving = 1;
+	// 记录想要映射页的虚拟地址
+	curenv->env_ipc_dstva = dstva;
+	curenv->env_ipc_value = 0;
+	curenv->env_ipc_from = 0;
+	curenv->env_ipc_perm = 0;
+
+	// 设置 Env 状态
+	curenv->env_status = ENV_NOT_RUNNABLE;
+
+	// 交出控制流，等待数据输入
+	sched_yield();
+
 	return 0;
 }
 
@@ -398,6 +486,12 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return ret;
 		case SYS_env_set_pgfault_upcall:
 			ret = sys_env_set_pgfault_upcall((envid_t) a1, (void*)a2);
+			return ret;
+		case SYS_ipc_try_send:
+			ret = sys_ipc_try_send((envid_t) a1, (uint32_t) a2, (void *) a3, (unsigned int) a4);
+			return ret;
+		case SYS_ipc_recv:
+			ret = sys_ipc_recv((void*)(a1));
 			return ret;
 		default:
 			return -E_INVAL;
