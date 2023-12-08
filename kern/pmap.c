@@ -615,6 +615,8 @@ mmio_map_region(physaddr_t pa, size_t size)
 	pa = ROUNDDOWN(pa, PGSIZE);
 	size -= pa;
 	if (base+size >= MMIOLIM) panic("not enough memory");
+	// 告诉CPU 这不是安全的缓存空间，使用PTE_PCD| PTE_PWT 代替PTE_W
+	// 将物理地址[pa,pa+size) 映射到虚拟地址 [base, base+size)
 	boot_map_region(kern_pgdir, base, size, pa, PTE_PCD|PTE_PWT|PTE_W);
 	base += size;
 	return (void*) (base - size);

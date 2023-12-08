@@ -157,12 +157,13 @@ trap_init_percpu(void)
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
 	int cpu_num = cpunum();
-
+	//在TSS中记录内核栈位置
 	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - cpu_num * (KSTKSIZE + KSTKGAP);
 	thiscpu->cpu_ts.ts_ss0 = GD_KD;
 	thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate);
 
 	// Initialize the TSS slot of the gdt.
+	// 使用 gdt[(GD_TSS0 >> 3) + i] 作为 CPU i 的 TSS 描述符;
 	gdt[(GD_TSS0 >> 3) + cpu_num] = SEG16(STS_T32A, (uint32_t) (&thiscpu->cpu_ts),
 										sizeof(struct Taskstate) - 1, 0);
 	gdt[(GD_TSS0 >> 3) + cpu_num].sd_s = 0;
